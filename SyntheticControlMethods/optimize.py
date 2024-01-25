@@ -88,12 +88,10 @@ class Optimize(object):
                     v_0 = np.append(v_0, 0)
             else:
                 # Dirichlet distribution returns a valid pmf over n_covariates states
-                v_0 = self.original_data.rng.dirichlet(np.ones(data.n_covariates), size=1)
+                v_0 = self.original_data.rng.dirichlet(np.ones(data.n_covariates))
                 if pen == "auto":
                     # if pen =="auto", we have an additional parameter to optimize over, so we append it
-                    v_0 = np.append(
-                        v_0, self.original_data.rng.lognormal(1.5, 1, size=1)
-                    )  # Still experimenting with what distribution is appropriate
+                    v_0 = np.append(v_0, self.original_data.rng.lognormal(1.5, 1))  # Still experimenting with what distribution is appropriate
 
             # Required to have non negative values
             if pen != "auto":
@@ -137,10 +135,10 @@ class Optimize(object):
         n_controls = control_outcome.shape[1]
 
         if pen == "auto":
-            V = np.diag(v_0[:-1])
+            V = np.diag(v_0[:-1] / np.sum(v_0[:-1]))
             pen_coef = v_0[-1]
         else:
-            V = np.diag(v_0)
+            V = np.diag(v_0 / np.sum(v_0))
             pen_coef = pen
 
         # Construct the problem - constrain weights to be non-negative
@@ -154,7 +152,11 @@ class Optimize(object):
         if placebo == "in-time":
             treated_synth_difference = cvx.sum(V @ cvx.square(treated_covariates - control_covariates @ w))
         else:
-            treated_synth_difference = cvx.sum(V @ cvx.square(treated_covariates.T - control_covariates @ w))
+            # np.diagonal(V): (1 x n_covariates)
+            # treated_covariates: (n_covariates x 1)
+            # control_covariates: (n_covariates x n_controls)
+            # w: (n_controls x 1)
+            treated_synth_difference = cvx.sum(np.diagonal(V) @ cvx.square(treated_covariates - control_covariates @ w))
 
         pairwise_difference = cvx.sum(V @ (cvx.square(pairwise_difference) @ w))
         objective = cvx.Minimize(treated_synth_difference + pen_coef * pairwise_difference)
