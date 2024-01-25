@@ -268,9 +268,7 @@ class DataProcessor(object):
         # Identify which rows correspond to which control unit by setting index,
         # then take the unitwise mean of each covariate
         # This results in the desired (n_control x n_covariates) matrix
-        control_covariates = np.array(
-            control_data[covariates].set_index(np.arange(len(control_data[covariates])) // periods_pre_treatment).groupby(level=-1).mean()
-        ).T
+        control_covariates = np.array(control_data[covariates + [id_var]].groupby(id_var).mean()).T
 
         return control_outcome_all, control_outcome, control_covariates
 
@@ -281,7 +279,7 @@ class DataProcessor(object):
         big_dataframe = np.concatenate((treated_covariates, control_covariates), axis=1)
 
         # Rescale each covariate to have unit variance
-        big_dataframe /= np.apply_along_axis(np.std, 0, big_dataframe)
+        big_dataframe /= np.apply_along_axis(np.std, 1, big_dataframe).reshape(-1, 1)
 
         # Re-seperate treated and control from big dataframe
         treated_covariates = big_dataframe[:, 0].reshape(n_covariates, 1)  # First column is treated unit
@@ -507,7 +505,7 @@ class DiffSynth(DataProcessor, Optimize, Plot, Tables, ValidityTests):
             # Compute change from previous period
             if not ignore_all_cols:
                 if col not in not_diff_cols:
-                    modified_dataset[col].diff()
+                    modified_dataset[col] = modified_dataset[col].diff()
 
         # Drop first time period for every unit as the change from the previous period is undefined
         modified_dataset.drop(modified_dataset.loc[modified_dataset[data.time] == modified_dataset[data.time].min()].index, inplace=True)
